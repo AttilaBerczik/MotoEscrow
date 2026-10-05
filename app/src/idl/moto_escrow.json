@@ -1,0 +1,380 @@
+{
+  "address": "6H3xC9yvLTM8YX8ruRDHbqmGySGTuQmdKSH8oW9jjhLF",
+  "metadata": {
+    "name": "moto_escrow",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "cancel_ride",
+      "docs": [
+        "Cancel ride and refund fare to rider if already funded, or cancel if created"
+      ],
+      "discriminator": [
+        150,
+        77,
+        203,
+        32,
+        143,
+        141,
+        243,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "ride_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "driver"
+              },
+              {
+                "kind": "account",
+                "path": "ride_escrow.ride_id",
+                "account": "RideEscrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "signer": true
+        },
+        {
+          "name": "rider",
+          "writable": true
+        },
+        {
+          "name": "driver",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "create_and_fund_ride",
+      "docs": [
+        "One-step: Rider creates and funds ride directly from driver's QR code"
+      ],
+      "discriminator": [
+        55,
+        79,
+        17,
+        184,
+        194,
+        85,
+        217,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "ride_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "driver"
+              },
+              {
+                "kind": "arg",
+                "path": "ride_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "driver",
+          "writable": true
+        },
+        {
+          "name": "rider",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "ride_id",
+          "type": "u64"
+        },
+        {
+          "name": "fare_lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "create_ride",
+      "docs": [
+        "Driver creates ride escrow account on-chain with expected fare"
+      ],
+      "discriminator": [
+        148,
+        15,
+        25,
+        160,
+        176,
+        215,
+        211,
+        58
+      ],
+      "accounts": [
+        {
+          "name": "ride_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "driver"
+              },
+              {
+                "kind": "arg",
+                "path": "ride_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "driver",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "ride_id",
+          "type": "u64"
+        },
+        {
+          "name": "fare_lamports",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "fund_ride",
+      "docs": [
+        "Rider funds the existing created ride"
+      ],
+      "discriminator": [
+        62,
+        204,
+        160,
+        228,
+        209,
+        189,
+        237,
+        61
+      ],
+      "accounts": [
+        {
+          "name": "ride_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "ride_escrow.driver",
+                "account": "RideEscrow"
+              },
+              {
+                "kind": "account",
+                "path": "ride_escrow.ride_id",
+                "account": "RideEscrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rider",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "release_payment",
+      "docs": [
+        "Rider releases the escrowed fare to the driver upon ride completion"
+      ],
+      "discriminator": [
+        24,
+        34,
+        191,
+        86,
+        145,
+        160,
+        183,
+        233
+      ],
+      "accounts": [
+        {
+          "name": "ride_escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  105,
+                  100,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "driver"
+              },
+              {
+                "kind": "account",
+                "path": "ride_escrow.ride_id",
+                "account": "RideEscrow"
+              }
+            ]
+          }
+        },
+        {
+          "name": "rider",
+          "signer": true
+        },
+        {
+          "name": "driver",
+          "writable": true
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "RideEscrow",
+      "discriminator": [
+        245,
+        2,
+        67,
+        211,
+        221,
+        201,
+        13,
+        116
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidFare",
+      "msg": "Fare must be greater than zero"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidStatus",
+      "msg": "Invalid ride status for this operation"
+    },
+    {
+      "code": 6002,
+      "name": "Unauthorized",
+      "msg": "Signer is not authorized to perform this operation"
+    },
+    {
+      "code": 6003,
+      "name": "UnauthorizedRider",
+      "msg": "Caller is not the rider of this ride"
+    },
+    {
+      "code": 6004,
+      "name": "UnauthorizedDriver",
+      "msg": "Specified driver does not match escrow driver"
+    }
+  ],
+  "types": [
+    {
+      "name": "RideEscrow",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "driver",
+            "type": "pubkey"
+          },
+          {
+            "name": "rider",
+            "type": "pubkey"
+          },
+          {
+            "name": "ride_id",
+            "type": "u64"
+          },
+          {
+            "name": "fare_lamports",
+            "type": "u64"
+          },
+          {
+            "name": "status",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
