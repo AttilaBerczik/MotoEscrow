@@ -9,11 +9,8 @@ import {
   ExternalLink, 
   ShieldCheck, 
   Zap, 
-  RefreshCw,
-  Clock,
-  ArrowRight,
-  Wallet,
-  Play
+  RefreshCw, 
+  Clock 
 } from 'lucide-react'
 import { 
   thbToSol, 
@@ -27,7 +24,7 @@ import {
 } from '../utils/solana'
 import * as anchor from '@coral-xyz/anchor'
 
-export const DriverView = ({ network, onSwitchToRider }) => {
+export const DriverView = ({ network }) => {
   const { connection } = useConnection()
   const wallet = useWallet()
   const { publicKey } = wallet
@@ -58,9 +55,7 @@ export const DriverView = ({ network, onSwitchToRider }) => {
       url: rideUrl,
     }
 
-    // Save to shared store so Rider tab sees it immediately
     saveSimulatedRide(rideId, rideData)
-
     setActiveRide(rideData)
     setRideStatus({ status: 0 })
   }
@@ -69,15 +64,16 @@ export const DriverView = ({ network, onSwitchToRider }) => {
   useEffect(() => {
     if (!activeRide) return
 
-    // 1. Cross-tab real-time listener (syncs across tabs and windows instantly)
+    // 1. Cross-tab real-time listener
     const unsubscribe = subscribeToRideUpdates(activeRide.rideId, (updatedData) => {
       if (updatedData) {
-        setRideStatus({
+        setRideStatus((prev) => ({
+          ...prev,
           status: updatedData.status,
           rider: updatedData.rider,
           fareLamports: updatedData.fareLamports,
-          tx: updatedData.tx,
-        })
+          tx: updatedData.tx || prev?.tx,
+        }))
       }
     })
 
@@ -105,10 +101,22 @@ export const DriverView = ({ network, onSwitchToRider }) => {
         const program = getProgram(connection, wallet)
         const escrowData = await program.account.rideEscrow.fetch(pda)
         if (isMounted && escrowData) {
+          // Fetch latest transaction signature for this PDA if completed
+          let latestTx = null
+          try {
+            const sigs = await connection.getSignaturesForAddress(pda, { limit: 1 })
+            if (sigs && sigs.length > 0) {
+              latestTx = sigs[0].signature
+            }
+          } catch (sigErr) {
+            console.log('Error fetching sigs:', sigErr)
+          }
+
           const updated = {
             status: escrowData.status,
             rider: escrowData.rider.toBase58(),
             fareLamports: escrowData.fareLamports.toString(),
+            tx: latestTx || initialSim?.tx,
           }
           setRideStatus(updated)
           saveSimulatedRide(activeRide.rideId, updated)
@@ -118,7 +126,7 @@ export const DriverView = ({ network, onSwitchToRider }) => {
       }
     }
 
-    const interval = setInterval(checkOnChain, 3000)
+    const interval = setInterval(checkOnChain, 2500)
     return () => {
       isMounted = false
       unsubscribe()
@@ -177,7 +185,7 @@ export const DriverView = ({ network, onSwitchToRider }) => {
               alignItems: 'center',
               gap: '0.35rem'
             }}>
-              ⚡ Demo Driver Mode Active (Connect Phantom anytime)
+              ⚡ Demo Driver Mode Active (Connect Phantom/Solflare anytime)
             </span>
           )}
         </div>
@@ -234,11 +242,8 @@ export const DriverView = ({ network, onSwitchToRider }) => {
                 <Clock size={15} /> Settlement Speed
               </span>
               <span className="conversion-val" style={{ color: 'var(--sol-cyan)' }}>
-                ~400 ms (Instant)
+                ~400 ms
               </span>
-            </div>
-            <div className="fee-comparison">
-              <span>⚡ Traditional Taxi Fees: ~25-30% | Solana Escrow: &lt; $0.001</span>
             </div>
           </div>
 
@@ -340,7 +345,43 @@ export const DriverView = ({ network, onSwitchToRider }) => {
                 </span>
               </div>
             )}
+            <div className="conversion-row">
+              <span className="conversion-label">Escrow PDA</span>
+              <span className="conversion-val" style={{ fontSize: '0.75rem' }}>
+                <a
+                  href={NETWORK_CONFIGS[network]?.accountUrl(activeRide.pda)}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: 'var(--sol-cyan)', textDecoration: 'none' }}
+                >
+                  {activeRide.pda.slice(0, 6)}...{activeRide.pda.slice(-4)} ↗
+                </a>
+              </span>
+            </div>
           </div>
+
+          {/* Transaction Explorer Link when Completed */}
+          {rideStatus?.status === 2 && rideStatus?.tx && (
+            <div style={{ marginBottom: '1.25rem' }}>
+              <a
+                id="driver-explorer-tx-link"
+                href={NETWORK_CONFIGS[network]?.explorerUrl(rideStatus.tx)}
+                target="_blank"
+                rel="noreferrer"
+                className="mono-box"
+                style={{ 
+                  textDecoration: 'none', 
+                  color: 'var(--sol-cyan)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between'
+                }}
+              >
+                <span>Settlement Tx: {rideStatus.tx.slice(0, 14)}...</span>
+                <ExternalLink size={14} />
+              </a>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
@@ -352,15 +393,6 @@ export const DriverView = ({ network, onSwitchToRider }) => {
             >
               {copied ? <Check size={18} color="var(--sol-cyan)" /> : <Copy size={18} />}
               {copied ? 'Ride Link Copied!' : 'Copy Ride Link'}
-            </button>
-
-            {/* Direct switch to Passenger to test */}
-            <button
-              id="test-as-rider-btn"
-              className="btn-primary"
-              onClick={() => onSwitchToRider(activeRide)}
-            >
-              Test as Passenger (Lock & Release) <ArrowRight size={18} />
             </button>
 
             <button

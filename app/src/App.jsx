@@ -3,7 +3,6 @@ import { WalletContextProvider } from './components/WalletContextProvider'
 import { Navbar } from './components/Navbar'
 import { DriverView } from './components/DriverView'
 import { RiderView } from './components/RiderView'
-import { DemoHelper } from './components/DemoHelper'
 import { thbToSol } from './utils/solana'
 
 export function App() {
@@ -31,29 +30,6 @@ export function App() {
     }
   }, [])
 
-  // Switch to rider view with ride data
-  const handleSwitchToRider = (activeRide) => {
-    setRideParams({
-      driver: activeRide.driver,
-      rideId: activeRide.rideId,
-      fareTHB: activeRide.fareTHB,
-      fareSOL: activeRide.fareSOL,
-    })
-    setCurrentRole('rider')
-  }
-
-  // Back to driver
-  const handleBackToDriver = () => {
-    setCurrentRole('driver')
-  }
-
-  // Reset all
-  const handleResetDemo = () => {
-    setRideParams(null)
-    setCurrentRole('driver')
-    window.history.replaceState({}, '', window.location.pathname)
-  }
-
   return (
     <WalletContextProvider network={network}>
       <div className="app-container">
@@ -68,20 +44,13 @@ export function App() {
           {currentRole === 'driver' ? (
             <DriverView
               network={network}
-              onSwitchToRider={handleSwitchToRider}
             />
           ) : (
             <RiderView
               rideParams={rideParams}
               network={network}
-              onBackToDriver={handleBackToDriver}
             />
           )}
-
-          <DemoHelper
-            network={network}
-            onReset={handleResetDemo}
-          />
         </main>
       </div>
     </WalletContextProvider>

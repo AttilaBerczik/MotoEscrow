@@ -11,15 +11,13 @@ import {
   AlertTriangle,
   RotateCcw,
   Sparkles,
-  DollarSign,
-  ArrowLeft
+  DollarSign
 } from 'lucide-react'
 import { 
   findRidePda, 
   getProgram, 
   thbToLamports, 
   thbToSol, 
-  lamportsToSol,
   NETWORK_CONFIGS,
   DEFAULT_MOCK_DRIVER,
   DEFAULT_MOCK_RIDER,
@@ -30,7 +28,7 @@ import {
 import * as anchor from '@coral-xyz/anchor'
 import { PublicKey, SystemProgram } from '@solana/web3.js'
 
-export const RiderView = ({ rideParams, network, onBackToDriver }) => {
+export const RiderView = ({ rideParams, network }) => {
   const { connection } = useConnection()
   const wallet = useWallet()
   const { publicKey } = wallet
@@ -105,7 +103,7 @@ export const RiderView = ({ rideParams, network, onBackToDriver }) => {
       }
     }
 
-    const interval = setInterval(checkOnChain, 3000)
+    const interval = setInterval(checkOnChain, 2500)
     return () => {
       isMounted = false
       unsubscribe()
@@ -285,38 +283,19 @@ export const RiderView = ({ rideParams, network, onBackToDriver }) => {
               alignItems: 'center',
               gap: '0.35rem'
             }}>
-              ⚡ Demo Passenger Mode (Connect Phantom anytime)
+              ⚡ Demo Passenger Mode (Connect Phantom/Solflare anytime)
             </span>
           )}
         </div>
       </div>
 
       {!rideId ? (
-        <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>
-            No ride active yet. Scan the driver's QR code or auto-fill a test ride below.
+        <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+          <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>📱</div>
+          <h3 style={{ fontSize: '1.15rem', marginBottom: '0.5rem' }}>No Active Ride</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+            Scan the driver's QR code or open a ride link to review fare and lock into smart escrow.
           </p>
-          <button
-            id="fill-demo-ride-btn"
-            type="button"
-            className="btn-primary"
-            onClick={() => {
-              const newRideId = Date.now().toString()
-              setDriverAddress(DEFAULT_MOCK_DRIVER)
-              setRideId(newRideId)
-              setFareTHB('50')
-              setFareSOL(thbToSol('50'))
-              saveSimulatedRide(newRideId, {
-                rideId: newRideId,
-                driver: DEFAULT_MOCK_DRIVER,
-                fareTHB: '50',
-                fareSOL: thbToSol('50'),
-                status: 0,
-              })
-            }}
-          >
-            ⚡ Load Sample 50฿ Ride
-          </button>
         </div>
       ) : (
         <div>
@@ -394,7 +373,7 @@ export const RiderView = ({ rideParams, network, onBackToDriver }) => {
             <div className="conversion-row">
               <span className="conversion-label">Solana Fee</span>
               <span className="conversion-val" style={{ color: 'var(--sol-cyan)' }}>
-                ~0.000005 SOL ($0.0007)
+                0.000025 SOL
               </span>
             </div>
           </div>
@@ -402,10 +381,26 @@ export const RiderView = ({ rideParams, network, onBackToDriver }) => {
           {/* Transaction Hash */}
           {txSignature && (
             <div style={{ marginBottom: '1.25rem' }}>
-              <div className="mono-box">
+              <a
+                id="rider-explorer-tx-link"
+                href={explorerUrl(txSignature)}
+                target="_blank"
+                rel="noreferrer"
+                className="mono-box"
+                style={{ 
+                  textDecoration: 'none', 
+                  color: 'var(--sol-cyan)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between'
+                }}
+              >
                 <span>Tx: {txSignature.slice(0, 16)}...</span>
-                <span style={{ color: 'var(--sol-cyan)', fontSize: '0.75rem' }}>Confirmed ✅</span>
-              </div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <span>Confirmed</span>
+                  <ExternalLink size={13} />
+                </span>
+              </a>
             </div>
           )}
 
@@ -464,12 +459,18 @@ export const RiderView = ({ rideParams, network, onBackToDriver }) => {
           ) : (
             <div style={{ textAlign: 'center', padding: '1rem 0' }}>
               <button
-                id="back-to-driver-btn"
+                id="reset-passenger-view-btn"
                 type="button"
                 className="btn-primary"
-                onClick={onBackToDriver}
+                onClick={() => {
+                  setRideId('')
+                  setRideState({ status: 0 })
+                  setTxSignature(null)
+                  setErrorMsg(null)
+                  window.history.replaceState({}, '', window.location.pathname)
+                }}
               >
-                <ArrowLeft size={18} /> Back to Driver Terminal
+                <RotateCcw size={18} /> Return to Passenger Terminal
               </button>
             </div>
           )}
