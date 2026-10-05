@@ -34,9 +34,7 @@ export function App() {
   // Switch to rider view with ride data
   const handleSwitchToRider = (activeRide) => {
     setRideParams({
-      driver: activeRide.url.includes('driver=') 
-        ? new URLSearchParams(activeRide.url.split('?')[1]).get('driver') 
-        : '',
+      driver: activeRide.driver,
       rideId: activeRide.rideId,
       fareTHB: activeRide.fareTHB,
       fareSOL: activeRide.fareSOL,
@@ -44,16 +42,16 @@ export function App() {
     setCurrentRole('rider')
   }
 
-  // Quick demo button
-  const handleQuickDemo = () => {
-    const demoId = Date.now().toString()
-    setRideParams({
-      driver: '8z4yo6AnCCUshYmzo1hqm8eaqscJRLXhX4i336oLzoGy',
-      rideId: demoId,
-      fareTHB: '50',
-      fareSOL: thbToSol('50'),
-    })
-    setCurrentRole('rider')
+  // Back to driver
+  const handleBackToDriver = () => {
+    setCurrentRole('driver')
+  }
+
+  // Reset all
+  const handleResetDemo = () => {
+    setRideParams(null)
+    setCurrentRole('driver')
+    window.history.replaceState({}, '', window.location.pathname)
   }
 
   return (
@@ -76,12 +74,13 @@ export function App() {
             <RiderView
               rideParams={rideParams}
               network={network}
+              onBackToDriver={handleBackToDriver}
             />
           )}
 
           <DemoHelper
             network={network}
-            onQuickDemo={handleQuickDemo}
+            onReset={handleResetDemo}
           />
         </main>
       </div>

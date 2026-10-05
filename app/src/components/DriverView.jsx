@@ -11,15 +11,19 @@ import {
   Zap, 
   RefreshCw,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Wallet,
+  Play
 } from 'lucide-react'
 import { 
   thbToSol, 
-  thbToLamports, 
   findRidePda, 
   getProgram, 
   NETWORK_CONFIGS,
-  RIDE_STATUS 
+  DEFAULT_MOCK_DRIVER,
+  saveSimulatedRide,
+  getSimulatedRide,
+  subscribeToRideUpdates
 } from '../utils/solana'
 import * as anchor from '@coral-xyz/anchor'
 
@@ -32,70 +36,95 @@ export const DriverView = ({ network, onSwitchToRider }) => {
   const [activeRide, setActiveRide] = useState(null)
   const [rideStatus, setRideStatus] = useState(null)
   const [copied, setCopied] = useState(false)
-  const [checkingOnChain, setCheckingOnChain] = useState(false)
 
   const quickFares = ['30', '50', '80', '120']
   const solEquivalent = thbToSol(fareTHB)
+  const effectiveDriverPubkey = publicKey ? publicKey.toBase58() : DEFAULT_MOCK_DRIVER
 
   // Handle ride creation
   const handleCreateRide = () => {
-    if (!publicKey) return
     const rideId = Date.now().toString()
-    const ridePdaInfo = findRidePda(publicKey, rideId)
+    const ridePdaInfo = findRidePda(effectiveDriverPubkey, rideId)
 
-    const rideUrl = `${window.location.origin}/?role=rider&driver=${publicKey.toBase58()}&rideId=${rideId}&fareTHB=${fareTHB}&fareSOL=${solEquivalent}`
+    const rideUrl = `${window.location.origin}/?role=rider&driver=${effectiveDriverPubkey}&rideId=${rideId}&fareTHB=${fareTHB}&fareSOL=${solEquivalent}`
 
-    setActiveRide({
+    const rideData = {
       rideId,
+      driver: effectiveDriverPubkey,
       fareTHB,
       fareSOL: solEquivalent,
-      pda: ridePdaInfo.pda.toBase58(),
+      status: 0, // Created
+      pda: ridePdaInfo?.pda?.toBase58 ? ridePdaInfo.pda.toBase58() : 'EscrowPDA',
       url: rideUrl,
-    })
-    setRideStatus(null)
+    }
+
+    // Save to shared store so Rider tab sees it immediately
+    saveSimulatedRide(rideId, rideData)
+
+    setActiveRide(rideData)
+    setRideStatus({ status: 0 })
   }
 
-  // Poll escrow account state on-chain
+  // Listen to both on-chain account AND cross-tab sync store
   useEffect(() => {
-    if (!activeRide || !publicKey) return
+    if (!activeRide) return
 
+    // 1. Cross-tab real-time listener (syncs across tabs and windows instantly)
+    const unsubscribe = subscribeToRideUpdates(activeRide.rideId, (updatedData) => {
+      if (updatedData) {
+        setRideStatus({
+          status: updatedData.status,
+          rider: updatedData.rider,
+          fareLamports: updatedData.fareLamports,
+          tx: updatedData.tx,
+        })
+      }
+    })
+
+    // Also check initial local store
+    const initialSim = getSimulatedRide(activeRide.rideId)
+    if (initialSim) {
+      setRideStatus({
+        status: initialSim.status,
+        rider: initialSim.rider,
+        fareLamports: initialSim.fareLamports,
+        tx: initialSim.tx,
+      })
+    }
+
+    // 2. On-chain polling (if real wallet and on-chain account exists)
     let isMounted = true
-    const checkStatus = async () => {
+    const checkOnChain = async () => {
+      if (!publicKey) return
       try {
-        setCheckingOnChain(true)
         const rideIdBn = new anchor.BN(activeRide.rideId)
         const { pda } = findRidePda(publicKey, rideIdBn)
-        
-        // Fetch account data
         const accountInfo = await connection.getAccountInfo(pda)
-        if (!accountInfo) {
-          if (isMounted) setRideStatus(null)
-          return
-        }
+        if (!accountInfo) return
 
         const program = getProgram(connection, wallet)
         const escrowData = await program.account.rideEscrow.fetch(pda)
         if (isMounted && escrowData) {
-          setRideStatus({
+          const updated = {
             status: escrowData.status,
             rider: escrowData.rider.toBase58(),
             fareLamports: escrowData.fareLamports.toString(),
-          })
+          }
+          setRideStatus(updated)
+          saveSimulatedRide(activeRide.rideId, updated)
         }
       } catch (err) {
-        console.log('Account not initialized or error fetching:', err.message)
-      } finally {
-        if (isMounted) setCheckingOnChain(false)
+        // Ignored if account not yet created on chain
       }
     }
 
-    checkStatus()
-    const interval = setInterval(checkStatus, 3000)
+    const interval = setInterval(checkOnChain, 3000)
     return () => {
       isMounted = false
+      unsubscribe()
       clearInterval(interval)
     }
-  }, [activeRide, publicKey, connection])
+  }, [activeRide, publicKey, connection, wallet])
 
   const handleCopyLink = () => {
     if (!activeRide) return
@@ -119,23 +148,42 @@ export const DriverView = ({ network, onSwitchToRider }) => {
         <p className="card-subtitle">
           Create an instant escrow ride & receive direct Solana settlement
         </p>
+
+        {/* Wallet Connection Status Badge */}
+        <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'center' }}>
+          {publicKey ? (
+            <span style={{ 
+              fontSize: '0.8rem', 
+              color: 'var(--sol-cyan)', 
+              background: 'rgba(20, 241, 149, 0.1)', 
+              padding: '0.25rem 0.75rem', 
+              borderRadius: '999px',
+              border: '1px solid rgba(20, 241, 149, 0.25)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}>
+              🟢 Wallet Connected: {publicKey.toBase58().slice(0, 4)}...{publicKey.toBase58().slice(-4)}
+            </span>
+          ) : (
+            <span style={{ 
+              fontSize: '0.8rem', 
+              color: '#f59e0b', 
+              background: 'rgba(245, 158, 11, 0.1)', 
+              padding: '0.25rem 0.75rem', 
+              borderRadius: '999px',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}>
+              ⚡ Demo Driver Mode Active (Connect Phantom anytime)
+            </span>
+          )}
+        </div>
       </div>
 
-      {!publicKey ? (
-        <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-          <div style={{ 
-            fontSize: '3rem', 
-            marginBottom: '1rem',
-            animation: 'radar-pulse 2s infinite' 
-          }}>
-            🔌
-          </div>
-          <h3 style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>Connect Your Driver Wallet</h3>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem' }}>
-            Connect Phantom or Solflare to set fares and receive ride payments directly.
-          </p>
-        </div>
-      ) : !activeRide ? (
+      {!activeRide ? (
         <div>
           {/* Fare Input */}
           <div className="input-group">
@@ -151,7 +199,7 @@ export const DriverView = ({ network, onSwitchToRider }) => {
                 onChange={(e) => setFareTHB(e.target.value)}
                 min="10"
                 step="5"
-                placeholder="40"
+                placeholder="50"
               />
               <span className="fare-currency">THB</span>
             </div>
@@ -211,28 +259,28 @@ export const DriverView = ({ network, onSwitchToRider }) => {
           {rideStatus?.status === 1 ? (
             <div className="status-banner funded" id="ride-status-funded">
               <div className="status-icon-box">
-                <ShieldCheck size={22} color="#10b981" />
+                <ShieldCheck size={24} color="#10b981" />
               </div>
               <div>
-                <strong style={{ display: 'block', fontSize: '1.05rem' }}>
+                <strong style={{ display: 'block', fontSize: '1.1rem' }}>
                   ✅ RIDE IS FUNDED!
                 </strong>
                 <span style={{ fontSize: '0.85rem' }}>
-                  {activeRide.fareSOL} SOL locked in escrow. Safe to start ride!
+                  {activeRide.fareSOL} SOL locked safely in escrow. Safe to start driving!
                 </span>
               </div>
             </div>
           ) : rideStatus?.status === 2 ? (
             <div className="status-banner completed" id="ride-status-completed">
               <div className="status-icon-box">
-                <Check size={22} color="#3b82f6" />
+                <Check size={24} color="#3b82f6" />
               </div>
               <div>
-                <strong style={{ display: 'block', fontSize: '1.05rem' }}>
+                <strong style={{ display: 'block', fontSize: '1.1rem' }}>
                   🎉 PAYMENT RECEIVED!
                 </strong>
                 <span style={{ fontSize: '0.85rem' }}>
-                  {activeRide.fareSOL} SOL transferred directly to your wallet!
+                  +{activeRide.fareSOL} SOL deposited directly into your driver wallet!
                 </span>
               </div>
             </div>
@@ -249,10 +297,10 @@ export const DriverView = ({ network, onSwitchToRider }) => {
               </div>
               <div>
                 <strong style={{ display: 'block', fontSize: '0.95rem' }}>
-                  Waiting for Rider to Lock Fare...
+                  Waiting for Passenger to Lock Fare...
                 </strong>
                 <span style={{ fontSize: '0.8rem', opacity: 0.9 }}>
-                  Show this QR code to the passenger.
+                  Show this QR code to the passenger to scan.
                 </span>
               </div>
             </div>
@@ -279,14 +327,14 @@ export const DriverView = ({ network, onSwitchToRider }) => {
               <span className="conversion-val">#{activeRide.rideId.slice(-6)}</span>
             </div>
             <div className="conversion-row">
-              <span className="conversion-label">Escrow PDA</span>
+              <span className="conversion-label">Driver Address</span>
               <span className="conversion-val" style={{ fontSize: '0.75rem' }}>
-                {activeRide.pda.slice(0, 6)}...{activeRide.pda.slice(-6)}
+                {activeRide.driver.slice(0, 6)}...{activeRide.driver.slice(-6)}
               </span>
             </div>
             {rideStatus?.rider && (
               <div className="conversion-row">
-                <span className="conversion-label">Passenger Wallet</span>
+                <span className="conversion-label">Passenger</span>
                 <span className="conversion-val" style={{ fontSize: '0.75rem', color: 'var(--sol-cyan)' }}>
                   {rideStatus.rider.slice(0, 6)}...{rideStatus.rider.slice(-6)}
                 </span>
@@ -295,7 +343,7 @@ export const DriverView = ({ network, onSwitchToRider }) => {
           </div>
 
           {/* Action Buttons */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
             <button
               id="copy-ride-link-btn"
               className="btn-primary"
@@ -306,12 +354,13 @@ export const DriverView = ({ network, onSwitchToRider }) => {
               {copied ? 'Ride Link Copied!' : 'Copy Ride Link'}
             </button>
 
+            {/* Direct switch to Passenger to test */}
             <button
-              id="open-rider-sim-btn"
+              id="test-as-rider-btn"
               className="btn-primary"
               onClick={() => onSwitchToRider(activeRide)}
             >
-              Open as Passenger in Demo <ArrowRight size={18} />
+              Test as Passenger (Lock & Release) <ArrowRight size={18} />
             </button>
 
             <button
