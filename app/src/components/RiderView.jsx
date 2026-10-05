@@ -130,44 +130,39 @@ export const RiderView = ({ rideParams, network, onBackToDriver }) => {
     setTxSignature(null)
 
     try {
-      // If real wallet is connected, try real on-chain transaction
+      // If real wallet is connected, execute real on-chain transaction
       if (publicKey && pdaInfo?.pda) {
-        try {
-          const driverPk = new PublicKey(driverAddress)
-          const rideIdBn = new anchor.BN(rideId || Date.now().toString())
-          const lamportsBn = thbToLamports(fareTHB)
-          const program = getProgram(connection, wallet)
+        const driverPk = new PublicKey(driverAddress)
+        const rideIdBn = new anchor.BN(rideId || Date.now().toString())
+        const lamportsBn = thbToLamports(fareTHB)
+        const program = getProgram(connection, wallet)
 
-          const tx = await program.methods
-            .createAndFundRide(rideIdBn, lamportsBn)
-            .accounts({
-              rideEscrow: pdaInfo.pda,
-              driver: driverPk,
-              rider: publicKey,
-              systemProgram: SystemProgram.programId,
-            })
-            .rpc()
+        const tx = await program.methods
+          .createAndFundRide(rideIdBn, lamportsBn)
+          .accounts({
+            rideEscrow: pdaInfo.pda,
+            driver: driverPk,
+            rider: publicKey,
+            systemProgram: SystemProgram.programId,
+          })
+          .rpc()
 
-          setTxSignature(tx)
-          const updated = {
-            status: 1, // Funded
-            rider: publicKey.toBase58(),
-            fareTHB,
-            fareSOL,
-            tx,
-          }
-          saveSimulatedRide(rideId, updated)
-          setRideState(updated)
-          setLoading(false)
-          return
-        } catch (chainErr) {
-          console.warn('On-chain tx failed or cancelled, falling back to simulated sync:', chainErr.message)
-          // Fall back to simulation so demo never blocks!
+        setTxSignature(tx)
+        const updated = {
+          status: 1, // Funded
+          rider: publicKey.toBase58(),
+          fareTHB,
+          fareSOL,
+          tx,
         }
+        saveSimulatedRide(rideId, updated)
+        setRideState(updated)
+        setLoading(false)
+        return
       }
 
-      // Simulation / Instant Demo Mode
-      await new Promise((resolve) => setTimeout(resolve, 600)) // 600ms realistic delay
+      // Simulation / Instant Demo Mode (only when no wallet is connected)
+      await new Promise((resolve) => setTimeout(resolve, 600))
       const mockTx = '5UfR8zK...' + Math.random().toString(36).substring(2, 10)
       const updated = {
         status: 1, // Funded
@@ -180,7 +175,8 @@ export const RiderView = ({ rideParams, network, onBackToDriver }) => {
       setRideState(updated)
       setTxSignature(mockTx)
     } catch (err) {
-      setErrorMsg(err.message || 'Error locking escrow.')
+      console.error('Lock escrow failed:', err)
+      setErrorMsg(err.message || 'Error locking escrow on Solana.')
     } finally {
       setLoading(false)
     }
@@ -193,33 +189,29 @@ export const RiderView = ({ rideParams, network, onBackToDriver }) => {
 
     try {
       if (publicKey && pdaInfo?.pda) {
-        try {
-          const driverPk = new PublicKey(driverAddress)
-          const program = getProgram(connection, wallet)
+        const driverPk = new PublicKey(driverAddress)
+        const program = getProgram(connection, wallet)
 
-          const tx = await program.methods
-            .releasePayment()
-            .accounts({
-              rideEscrow: pdaInfo.pda,
-              rider: publicKey,
-              driver: driverPk,
-            })
-            .rpc()
+        const tx = await program.methods
+          .releasePayment()
+          .accounts({
+            rideEscrow: pdaInfo.pda,
+            rider: publicKey,
+            driver: driverPk,
+          })
+          .rpc()
 
-          setTxSignature(tx)
-          triggerConfetti()
-          const updated = {
-            ...rideState,
-            status: 2, // Completed
-            tx,
-          }
-          saveSimulatedRide(rideId, updated)
-          setRideState(updated)
-          setLoading(false)
-          return
-        } catch (chainErr) {
-          console.warn('On-chain release failed, falling back to simulated sync:', chainErr.message)
+        setTxSignature(tx)
+        triggerConfetti()
+        const updated = {
+          ...rideState,
+          status: 2, // Completed
+          tx,
         }
+        saveSimulatedRide(rideId, updated)
+        setRideState(updated)
+        setLoading(false)
+        return
       }
 
       // Simulation / Instant Demo Mode
@@ -235,7 +227,8 @@ export const RiderView = ({ rideParams, network, onBackToDriver }) => {
       setRideState(updated)
       setTxSignature(mockTx)
     } catch (err) {
-      setErrorMsg(err.message || 'Error releasing payment.')
+      console.error('Release payment failed:', err)
+      setErrorMsg(err.message || 'Error releasing payment on Solana.')
     } finally {
       setLoading(false)
     }
